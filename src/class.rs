@@ -75,6 +75,12 @@ pub struct Class {
     pub(crate) annotations: AnnotationSetItem,
 }
 
+impl std::fmt::Display for Class {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.jtype().type_descriptor())
+    }
+}
+
 impl Class {
     gen_is_flag_set!(is_public, PUBLIC);
     gen_is_flag_set!(is_private, PRIVATE);
@@ -109,6 +115,11 @@ impl Class {
         self.direct_methods()
             .iter()
             .chain(self.virtual_methods().iter())
+    }
+
+    /// Find methods by name
+    pub fn find_method_by_name<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &Method> + 'a {
+        self.methods().filter(move |method| method.name() == name)
     }
 
     pub(crate) fn try_from_dex<T: AsRef<[u8]>>(
@@ -310,7 +321,7 @@ pub struct ClassDefItem {
 pub(crate) struct ClassDefItemIter<T> {
     /// Source file of the parent `Dex`.
     source: Source<T>,
-    offset: usize,
+    pub(crate) offset: usize,
     len: uint,
     endian: super::Endian,
 }

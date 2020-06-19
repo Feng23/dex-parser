@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufReader, ops::Range};
+use std::{cell::RefCell, fs::File, io::BufReader, ops::Range};
 
 use adler32;
 use getset::{CopyGetters, Getters};
@@ -325,12 +325,14 @@ impl<'a> ctx::TryFromCtx<'a, Endian> for MapItem {
 }
 
 /// Represents a Dex file
-pub struct Dex<T> {
+pub struct Dex<T = Mmap> {
     /// Source from which this Dex file is loaded from.
     pub(crate) source: Source<T>,
     /// Items in string_ids section are cached here.
     pub(crate) strings: Strings<T>,
     pub(crate) inner: DexInner,
+
+    class_offset_cache: RefCell<Vec<Option<uint>>>,
 }
 
 impl<T> Dex<T>
@@ -429,9 +431,25 @@ where
         Section::new(class_defs_section)
     }
 
-    pub(crate) fn find_class_by_type(&self, type_id: TypeId) -> Result<Option<Class>> {
-        for class_def in self.class_defs() {
+    pub fn find_class_by_type(&self, type_id: TypeId) -> Result<Option<Class>> {
+        if let Some(&Some(class_def_offset)) =
+            self.class_offset_cache.borrow().get(type_id as usize)
+        {
+            let class_def = self.class_def_item(class_def_offset)?;
+            return Ok(Some(Class::try_from_dex(self, &class_def)?));
+        }
+
+        let mut def_iter = self.class_defs_impl();
+        let mut previous_offset = def_iter.offset;
+
+        while let Some(class_def) = def_iter.next() {
             let class_def = class_def?;
+            self.class_offset_cache
+                .borrow_mut()
+                .resize(class_def.class_idx as usize + 1, None);
+            self.class_offset_cache.borrow_mut()[class_def.class_idx as usize] =
+                Some(previous_offset as u32);
+            previous_offset = def_iter.offset;
             if class_def.class_idx == type_id {
                 return Ok(Some(Class::try_from_dex(self, &class_def)?));
             }
@@ -594,11 +612,22 @@ where
 
     /// Iterator over the class_defs section.
     pub fn class_defs(&self) -> impl Iterator<Item = Result<ClassDefItem>> + '_ {
+        self.class_defs_impl()
+    }
+
+    fn class_defs_impl(&self) -> ClassDefItemIter<T> {
         let defs_len = self.inner.class_defs_len();
         let defs_offset = self.inner.class_defs_offset();
         let source = self.source.clone();
         let endian = self.get_endian();
         ClassDefItemIter::new(source, defs_offset, defs_len, endian)
+    }
+
+    pub fn class_def_item(&self, offset: uint) -> Result<ClassDefItem> {
+        let mut offset = offset as usize;
+        self.source
+            .gread_with(&mut offset, self.get_endian())
+            .map_err(Error::from)
     }
 
     /// Iterator over the type_ids section.
@@ -770,6 +799,7 @@ impl DexReader {
             source: source.clone(),
             strings: cache,
             inner,
+            class_offset_cache: RefCell::new(vec![]),
         })
     }
 }

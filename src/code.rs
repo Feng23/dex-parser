@@ -5,8 +5,8 @@ use std::{fmt, ops::Deref};
 use getset::{CopyGetters, Getters};
 
 use crate::{
-    encoded_item::EncodedCatchHandlers, error::Error, jtype::Type, string::DexString, uint, ulong,
-    ushort,
+    bytecode::ByteCodeDecoder, encoded_item::EncodedCatchHandlers, error::Error, jtype::Type,
+    string::DexString, uint, ulong, ushort,
 };
 
 /// Debug Info of a method.
@@ -47,6 +47,13 @@ impl CodeItem {
     /// Line number and source file information.
     pub fn debug_info_item(&self) -> Option<&DebugInfoItem> {
         self.debug_info_item.as_ref()
+    }
+
+    pub fn bytecode(&self) -> ByteCodeDecoder<&[u8], byteorder::LittleEndian> {
+        let size = self.insns().len() * 2;
+        let code =
+            unsafe { std::slice::from_raw_parts(&self.insns()[0] as *const _ as *const _, size) };
+        ByteCodeDecoder::<_, byteorder::LittleEndian>::new(code)
     }
 }
 

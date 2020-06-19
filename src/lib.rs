@@ -37,6 +37,8 @@ mod search;
 mod source;
 pub mod string;
 
+pub mod bytecode;
+
 /// The constant NO_INDEX is used to indicate that an index value is absent.
 pub const NO_INDEX: uint = 0xffff_ffff;
 const ENDIAN_CONSTANT: (ubyte, ubyte, ubyte, ubyte) = (0x12, 0x34, 0x56, 0x78);
