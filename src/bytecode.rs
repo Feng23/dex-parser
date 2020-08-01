@@ -1228,12 +1228,11 @@ impl<R: Read + Debug, B: ByteOrder> Iterator for ByteCodeDecoder<R, B> {
             let signature = self.cursor.read_u16::<B>().ok()?;
             if signature == 0x0100 {
                 let size = self.cursor.read_u16::<B>().ok()? as usize;
-                let mut key = self.cursor.read_i32::<B>().ok()?;
-                for _ in 0..size {
+                let key = self.cursor.read_i32::<B>().ok()?;
+                for idx in 0..size {
                     let target =
                         (self.cursor.read_i32::<B>().ok()? + data.inst_addr as i32) as usize;
-                    data.targets.push((key, target));
-                    key += 1;
+                    data.targets.push((key + idx as i32, target));
                 }
             } else if signature == 0x0200 {
                 let size = self.cursor.read_u16::<B>().ok()? as usize;
